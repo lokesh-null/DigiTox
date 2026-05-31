@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="DigiTox — Control your time. Control your life. A smart digital detox app that helps you overcome screen addiction through behavioral psychology and intelligent interventions." />
+    <meta name="theme-color" content="#0a0a0f" />
+    <title>DigiTox — Digital Detox</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="app">
+      <!-- Splash screen -->
+      <div id="splash-screen" class="splash-screen">
+        <div class="splash-content">
+          <div class="splash-icon">
+            <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+              <defs>
+                <linearGradient id="splash-grad" x1="0" y1="0" x2="72" y2="72">
+                  <stop offset="0%" stop-color="#6C5CE7"/>
+                  <stop offset="100%" stop-color="#00CEC9"/>
+                </linearGradient>
+              </defs>
+              <rect x="4" y="4" width="64" height="64" rx="18" stroke="url(#splash-grad)" stroke-width="3" fill="rgba(108,92,231,0.1)"/>
+              <path d="M36 20v16l10 6" stroke="url(#splash-grad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <circle cx="36" cy="36" r="14" stroke="url(#splash-grad)" stroke-width="2" fill="none" opacity="0.4"/>
+            </svg>
+          </div>
+          <h1 class="splash-title">DigiTox</h1>
+          <p class="splash-tagline">Control your time. Control your life.</p>
+          <div class="splash-loader">
+            <div class="splash-loader-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main app container -->
+      <div id="app-container" class="app-container hidden">
+        <!-- Header -->
+        <header id="app-header" class="app-header">
+          <div class="header-left">
+            <h1 class="header-title">DigiTox</h1>
+          </div>
+          <div class="header-right">
+            <button id="btn-emergency-header" class="header-btn emergency-btn-pulse" title="Emergency Lock">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <!-- Screens container -->
+        <main id="screen-container" class="screen-container"></main>
+
+        <!-- Bottom Navigation -->
+        <nav id="bottom-nav" class="bottom-nav">
+          <button class="nav-item active" data-screen="dashboard" id="nav-dashboard">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+            <span>Dashboard</span>
+          </button>
+          <button class="nav-item" data-screen="focus" id="nav-focus">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="6"/>
+              <circle cx="12" cy="12" r="2"/>
+            </svg>
+            <span>Focus</span>
+          </button>
+          <button class="nav-item" data-screen="insights" id="nav-insights">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"/>
+              <line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+            <span>Insights</span>
+          </button>
+          <button class="nav-item" data-screen="habits" id="nav-habits">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            <span>Habits</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Intervention Popup Overlay -->
+      <div id="intervention-overlay" class="intervention-overlay hidden"></div>
+
+      <!-- Emergency Lock Overlay -->
+      <div id="emergency-overlay" class="emergency-overlay hidden"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
