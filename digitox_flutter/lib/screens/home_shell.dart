@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../data/database.dart';
 import 'dashboard_screen.dart';
 import 'focus_screen.dart';
 import 'insights_screen.dart';
@@ -203,6 +204,12 @@ class _HomeShellState extends State<HomeShell> {
           child: const Text('DigiTox', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.white)),
         ),
         actions: [
+          // Purpose Check button
+          IconButton(
+            icon: const Icon(Icons.psychology_outlined, color: AppTheme.textSecondary),
+            onPressed: _showPurposeCheck,
+            tooltip: 'Purpose Check',
+          ),
           IconButton(
             icon: const Icon(Icons.lock_outline, color: AppTheme.textSecondary),
             onPressed: _showEmergencySetup,
@@ -244,6 +251,166 @@ class _HomeShellState extends State<HomeShell> {
           ],
         ),
       ),
+    );
+  }
+  // ═══════════════════════════════════════
+  // FEATURE 8: Purpose Check System
+  // ═══════════════════════════════════════
+  void _showPurposeCheck() {
+    String selectedPurpose = '';
+    final purposes = [
+      {'emoji': '📋', 'label': 'Quick task', 'desc': 'Check one specific thing and leave'},
+      {'emoji': '💬', 'label': 'Reply to someone', 'desc': 'Respond to a message'},
+      {'emoji': '🔍', 'label': 'Research', 'desc': 'Look up specific information'},
+      {'emoji': '🎯', 'label': 'Intentional break', 'desc': 'Conscious relaxation (5-10 min)'},
+      {'emoji': '😶', 'label': 'No reason', 'desc': 'Just opened it automatically'},
+    ];
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'PurposeCheck',
+      pageBuilder: (context, anim1, anim2) {
+        return StatefulBuilder(builder: (dialogContext, setOverlayState) {
+          return Scaffold(
+            backgroundColor: Colors.black87,
+            body: Center(
+              child: Container(
+                margin: const EdgeInsets.all(AppTheme.spaceLg),
+                padding: const EdgeInsets.all(AppTheme.spaceLg),
+                decoration: BoxDecoration(
+                  color: AppTheme.bgSecondary,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                  border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('🧠', style: TextStyle(fontSize: 40)),
+                    const SizedBox(height: AppTheme.spaceMd),
+                    const Text('Purpose Check', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Before you pick up your phone, ask yourself:',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'What am I about to do, and why?',
+                      style: TextStyle(color: AppTheme.primaryLight, fontSize: 15, fontWeight: FontWeight.w600, fontStyle: FontStyle.italic),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppTheme.spaceLg),
+
+                    ...purposes.map((p) {
+                      final isSelected = selectedPurpose == p['label'];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                          onTap: () => setOverlayState(() => selectedPurpose = p['label']!),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppTheme.primary.withValues(alpha: 0.15) : AppTheme.surface,
+                              border: Border.all(
+                                color: isSelected ? AppTheme.primary.withValues(alpha: 0.5) : AppTheme.border,
+                              ),
+                              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(p['emoji']!, style: const TextStyle(fontSize: 20)),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(p['label']!, style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: isSelected ? AppTheme.primaryLight : Colors.white,
+                                      )),
+                                      Text(p['desc']!, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                                    ],
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Icon(Icons.check_circle, color: AppTheme.primary, size: 20),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+
+                    const SizedBox(height: AppTheme.spaceMd),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppTheme.border),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+                          ),
+                        ),
+                        const SizedBox(width: AppTheme.spaceMd),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: selectedPurpose.isEmpty ? null : () {
+                              _logPurposeCheck(selectedPurpose);
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: const Text('Continue', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    if (selectedPurpose == 'No reason') ...[
+                      const SizedBox(height: AppTheme.spaceMd),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.warning.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                          border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Text('⚠️', style: TextStyle(fontSize: 16)),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Automatic phone usage is a compulsion loop. Try putting it down for 2 minutes first.',
+                                style: TextStyle(fontSize: 11, color: AppTheme.warning),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  Future<void> _logPurposeCheck(String purpose) async {
+    await DigiToxDatabase().logPurposeCheck(
+      appName: 'general',
+      statedPurpose: purpose,
     );
   }
 }

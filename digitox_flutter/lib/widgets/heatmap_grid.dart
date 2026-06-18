@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../data/mock_data.dart';
+import '../data/data_provider.dart';
 
 class HeatmapGrid extends StatelessWidget {
-  final List<HeatmapData> data;
+  final List<HeatmapEntry> data;
 
   const HeatmapGrid({super.key, required this.data});
 
@@ -76,11 +76,11 @@ class HeatmapGrid extends StatelessWidget {
 
   Color _getColorForLevel(int level) {
     switch (level) {
-      case 0: return AppTheme.surfaceActive; // 0.03 equivalent
-      case 1: return const Color(0x336C5CE7); // 0.2
-      case 2: return const Color(0x666C5CE7); // 0.4
-      case 3: return const Color(0x66FF6B6B); // 0.4 danger
-      case 4: return const Color(0xB3FF6B6B); // 0.7 danger
+      case 0: return AppTheme.surfaceActive;
+      case 1: return const Color(0x336C5CE7);
+      case 2: return const Color(0x666C5CE7);
+      case 3: return const Color(0x66FF6B6B);
+      case 4: return const Color(0xB3FF6B6B);
       default: return AppTheme.surfaceActive;
     }
   }

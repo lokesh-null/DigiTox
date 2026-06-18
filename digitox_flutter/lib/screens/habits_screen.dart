@@ -4,6 +4,7 @@ import '../widgets/glass_card.dart';
 import '../widgets/habit_item.dart';
 import '../widgets/contribution_grid.dart';
 import '../data/mock_data.dart';
+import '../data/data_provider.dart';
 import '../utils/storage.dart';
 
 class HabitsScreen extends StatefulWidget {
@@ -238,7 +239,15 @@ class _HabitsScreenState extends State<HabitsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildSectionTitle('📅', 'Last 28 Days'),
-                ContributionGrid(data: generateContributionData()),
+                FutureBuilder<List<int>>(
+                  future: DataProvider().getContributionData(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      return ContributionGrid(data: snapshot.data!);
+                    }
+                    return ContributionGrid(data: List.filled(28, 0));
+                  },
+                ),
               ],
             ),
           ),

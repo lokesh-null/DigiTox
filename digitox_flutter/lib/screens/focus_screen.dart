@@ -5,6 +5,9 @@ import '../widgets/glass_card.dart';
 import '../widgets/focus_timer_ring.dart';
 import '../widgets/toggle_switch.dart';
 import '../data/mock_data.dart';
+import '../data/database.dart';
+import '../data/behavioral_engine.dart';
+import '../widgets/identity_badge.dart';
 import '../utils/storage.dart';
 
 class FocusScreen extends StatefulWidget {
@@ -22,6 +25,7 @@ class _FocusScreenState extends State<FocusScreen> {
   Timer? _timer;
   int completedSessions = 0;
   String currentTask = '';
+  FocusIdentityResult? _identity;
 
   @override
   void initState() {
@@ -30,8 +34,9 @@ class _FocusScreenState extends State<FocusScreen> {
   }
 
   Future<void> _loadStats() async {
-    completedSessions = await Storage.load(StorageKeys.focusSessions, fallback: 0) as int;
+    completedSessions = await DigiToxDatabase().getCompletedSessionCount();
     currentTask = await Storage.load('digitox_current_task', fallback: '') as String;
+    _identity = await BehavioralEngine().computeFocusIdentity();
     setState(() {});
   }
 
@@ -66,17 +71,55 @@ class _FocusScreenState extends State<FocusScreen> {
     await Storage.save(StorageKeys.focusSessions, completedSessions);
     await Storage.save(StorageKeys.streak, streak + 1);
 
+    // Log to database
+    final now = DateTime.now();
+    final startTime = now.subtract(Duration(minutes: selectedDuration)).millisecondsSinceEpoch;
+    final sessionId = await DigiToxDatabase().insertFocusSession(
+      startTime: startTime,
+      durationMinutes: selectedDuration,
+      task: currentTask.isNotEmpty ? currentTask : null,
+    );
+    await DigiToxDatabase().completeFocusSession(sessionId, now.millisecondsSinceEpoch, _xpForDuration(selectedDuration));
+
     setState(() {
       isFocusActive = false;
     });
 
     if (mounted) {
+      final xp = _xpForDuration(selectedDuration);
+      // Refresh identity
+      _identity = await BehavioralEngine().computeFocusIdentity();
+      if (!mounted) return;
+      setState(() {});
+      
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           backgroundColor: AppTheme.bgSecondary,
           title: const Text('🎉 Session Complete!'),
-          content: Text('Amazing focus! You just completed $selectedDuration minutes of deep work. Your streak is growing — keep it up!'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Amazing focus! You just completed $selectedDuration minutes of deep work.'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('✨', style: TextStyle(fontSize: 20)),
+                    const SizedBox(width: 8),
+                    Text('+$xp XP earned!', style: const TextStyle(color: AppTheme.primaryLight, fontWeight: FontWeight.bold, fontSize: 16)),
+                  ],
+                ),
+              ),
+            ],
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -86,6 +129,14 @@ class _FocusScreenState extends State<FocusScreen> {
         ),
       );
     }
+  }
+
+  int _xpForDuration(int minutes) {
+    if (minutes >= 90) return 50;
+    if (minutes >= 60) return 40;
+    if (minutes >= 45) return 30;
+    if (minutes >= 25) return 20;
+    return 10;
   }
 
   @override
@@ -203,6 +254,21 @@ class _FocusScreenState extends State<FocusScreen> {
               ),
             ),
             const SizedBox(height: AppTheme.spaceLg),
+
+            // Focus Identity Badge
+            if (_identity != null)
+              IdentityBadge(
+                level: _identity!.level,
+                title: _identity!.title,
+                emoji: _identity!.emoji,
+                totalXP: _identity!.totalXP,
+                xpForCurrentLevel: _identity!.xpForCurrentLevel,
+                xpForNextLevel: _identity!.xpForNextLevel,
+                progressPercent: _identity!.progressPercent,
+                streak: _identity!.streak,
+              ),
+            if (_identity != null)
+              const SizedBox(height: AppTheme.spaceLg),
 
             Align(
               alignment: Alignment.centerLeft,

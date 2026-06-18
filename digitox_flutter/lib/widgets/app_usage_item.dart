@@ -1,26 +1,34 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../data/mock_data.dart';
+import '../data/app_classifier.dart';
 
 class AppUsageItem extends StatelessWidget {
-  final MockApp app;
+  final String appName;
+  final String emoji;
+  final String category;
+  final Color color;
+  final int minutes;
   final int maxMinutes;
   final String formattedTime;
 
   const AppUsageItem({
     super.key,
-    required this.app,
+    required this.appName,
+    required this.emoji,
+    required this.category,
+    required this.color,
+    required this.minutes,
     required this.maxMinutes,
     required this.formattedTime,
   });
 
   @override
   Widget build(BuildContext context) {
-    double percent = maxMinutes > 0 ? app.minutes / maxMinutes : 0;
+    double percent = maxMinutes > 0 ? minutes / maxMinutes : 0;
     Color barColor;
-    if (app.category == AppCategories.addictive) {
+    if (AppClassifier.isAddictive(category)) {
       barColor = AppTheme.danger;
-    } else if (app.category == AppCategories.productive) {
+    } else if (AppClassifier.isProductive(category)) {
       barColor = AppTheme.secondary;
     } else {
       barColor = AppTheme.warning;
@@ -39,11 +47,11 @@ class AppUsageItem extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: app.color.withOpacity(0.2),
+              color: color.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(AppTheme.radiusMd),
             ),
             child: Center(
-              child: Text(app.emoji, style: const TextStyle(fontSize: 20)),
+              child: Text(emoji, style: const TextStyle(fontSize: 20)),
             ),
           ),
           const SizedBox(width: AppTheme.spaceMd),
@@ -51,13 +59,13 @@ class AppUsageItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(app.name, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                Text(appName, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
                 const SizedBox(height: 4),
                 Container(
                   height: 4,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
+                    color: Colors.white.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(2),
                   ),
                   child: FractionallySizedBox(

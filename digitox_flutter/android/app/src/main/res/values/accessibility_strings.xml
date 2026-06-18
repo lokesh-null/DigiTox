@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">DigiTox monitors which app is in the foreground to track your screen time and provide real-time digital wellbeing insights. No content is read or stored.</string>
+</resources>

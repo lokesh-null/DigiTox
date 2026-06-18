@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../data/data_provider.dart';
 import 'home_shell.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -42,6 +43,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
+    // Initialize real data sync in background during splash animation
+    DataProvider().initialize();
     _init();
   }
 
