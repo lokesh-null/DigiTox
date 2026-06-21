@@ -23,6 +23,9 @@
     <!-- Overlay permission for interventions -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Internet for AI Coach API -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:label="DigiTox"
         android:name="${applicationName}"

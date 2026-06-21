@@ -20,6 +20,7 @@ class _HomeShellState extends State<HomeShell> {
   bool isEmergencyActive = false;
   int emergencyRemaining = 0;
   Timer? _emergencyTimer;
+  int _refreshKey = 0;
 
   void _showEmergencySetup() {
     if (isEmergencyActive) {
@@ -213,8 +214,9 @@ class _HomeShellState extends State<HomeShell> {
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: AppTheme.textSecondary),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+              setState(() { _refreshKey++; });
             },
             tooltip: 'Settings',
           ),
@@ -234,11 +236,12 @@ class _HomeShellState extends State<HomeShell> {
         index: _currentIndex,
         children: [
           DashboardScreen(
+            key: ValueKey('dash_$_refreshKey'),
             onStartFocus: () => setState(() => _currentIndex = 1),
             onEmergencyLock: _showEmergencySetup,
           ),
           const FocusScreen(),
-          const InsightsScreen(),
+          InsightsScreen(key: ValueKey('insights_$_refreshKey')),
           const HabitsScreen(),
         ],
       ),

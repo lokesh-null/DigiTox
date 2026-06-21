@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'data_provider.dart';
 import 'behavioral_engine.dart';
 
@@ -29,9 +30,9 @@ class AIService {
     final apiKey = await getApiKey();
     if (apiKey == null || apiKey.isEmpty) return null;
     
-    // We use gemini-1.5-flash as it is fast and perfectly capable for JSON analysis and text generation
+    // We use gemini-2.5-flash as it is supported by your specific API key
     return GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       apiKey: apiKey,
       generationConfig: GenerationConfig(
         temperature: 0.7,
@@ -79,7 +80,21 @@ $contextData
 
       return response.text?.trim() ?? "Unable to generate briefing at this time.";
     } catch (e) {
-      return "AI Coach encountered an error analyzing your data. Please check your internet connection or API key.";
+      final apiKey = await getApiKey();
+      String availableModels = "";
+      try {
+        final res = await http.get(Uri.parse('https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey'));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final models = (data['models'] as List).map((m) => m['name']).toList();
+          availableModels = "\nAvailable models on your key: ${models.join(', ')}";
+        } else {
+          availableModels = "\nFailed to fetch models: ${res.statusCode}";
+        }
+      } catch (innerE) {
+        availableModels = "\nCould not fetch models: $innerE";
+      }
+      return "AI Coach Error: $e$availableModels";
     }
   }
 
@@ -113,7 +128,7 @@ $contextData
 
       return response.text?.trim() ?? "Unable to generate projection.";
     } catch (e) {
-      return "Error generating legacy projection.";
+      return "Error generating legacy projection: $e";
     }
   }
 
@@ -157,7 +172,7 @@ $contextData
 
       return response.text?.trim() ?? "Unable to generate report.";
     } catch (e) {
-      return "Error generating weekly report.";
+      return "Error generating weekly report: $e";
     }
   }
 }
