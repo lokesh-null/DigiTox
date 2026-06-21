@@ -6,6 +6,7 @@ import 'dashboard_screen.dart';
 import 'focus_screen.dart';
 import 'insights_screen.dart';
 import 'habits_screen.dart';
+import 'settings_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -209,6 +210,13 @@ class _HomeShellState extends State<HomeShell> {
             icon: const Icon(Icons.psychology_outlined, color: AppTheme.textSecondary),
             onPressed: _showPurposeCheck,
             tooltip: 'Purpose Check',
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: AppTheme.textSecondary),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+            },
+            tooltip: 'Settings',
           ),
           IconButton(
             icon: const Icon(Icons.lock_outline, color: AppTheme.textSecondary),

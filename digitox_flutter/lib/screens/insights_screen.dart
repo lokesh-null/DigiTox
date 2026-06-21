@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/heatmap_grid.dart';
 import '../widgets/dopamine_gauge.dart';
 import '../data/data_provider.dart';
 import '../data/behavioral_engine.dart';
+import '../data/ai_service.dart';
 
 class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});
@@ -29,6 +31,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
   AttentionPortfolioResult? _portfolio;
   RegretForecastResult? _regretForecast;
   TriggerDetectionResult? _triggers;
+  String _heatmapFilter = 'All';
+  
+  // Real AI Reports
+  String _legacyProjection = '';
+  String _weeklyPsychReport = '';
 
   @override
   void initState() {
@@ -39,7 +46,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
   Future<void> _loadData() async {
     try {
       weeklyData = await DataProvider().getWeeklyData();
-      heatmapData = await DataProvider().getHeatmapData();
+      heatmapData = await DataProvider().getHeatmapData(filter: _heatmapFilter);
       suggestions = await DataProvider().getAISuggestions();
       grade = await DataProvider().getWeeklyGrade();
 
@@ -52,6 +59,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
       _portfolio = await BehavioralEngine().computeAttentionPortfolio();
       _regretForecast = await BehavioralEngine().computeRegretForecast();
       _triggers = await BehavioralEngine().computeTriggerDetection();
+
+      // Load Real AI Reports
+      _legacyProjection = await AIService().getLegacyProjection();
+      _weeklyPsychReport = await AIService().getWeeklyPsychologicalReport();
     } catch (e) {
       // Use defaults
     }
@@ -300,31 +311,93 @@ class _InsightsScreenState extends State<InsightsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSectionTitle('🔥', 'Peak Distraction Hours'),
-                HeatmapGrid(data: heatmapData),
+                _buildSectionTitle('🔥', 'Usage Heatmap'),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: ['All', 'Distraction', 'Focus'].map((filter) {
+                      final isSelected = filter == _heatmapFilter;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(filter),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() {
+                                _heatmapFilter = filter;
+                                _loading = true;
+                              });
+                              _loadData();
+                            }
+                          },
+                          selectedColor: AppTheme.primary,
+                          backgroundColor: AppTheme.surfaceHover,
+                          labelStyle: TextStyle(color: isSelected ? Colors.white : AppTheme.textSecondary),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spaceLg),
+                HeatmapGrid(data: heatmapData, filter: _heatmapFilter),
               ],
             ),
           ),
           const SizedBox(height: AppTheme.spaceLg),
 
-          // Suggestions
-          _buildSectionTitle('🤖', 'AI Recommendations'),
-          ...suggestions.map((s) => Container(
-            margin: const EdgeInsets.only(bottom: AppTheme.spaceSm),
-            padding: const EdgeInsets.all(AppTheme.spaceMd),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceHover,
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          // ═══════════════════════════════════════
+          // FEATURE 15: Weekly Psychological Report
+          // ═══════════════════════════════════════
+          if (_weeklyPsychReport.isNotEmpty) ...[
+            _buildSectionTitle('🧠', 'Weekly Psychological Report'),
+            Container(
+              padding: const EdgeInsets.all(AppTheme.spaceLg),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceHover,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+              ),
+              child: MarkdownBody(
+                data: _weeklyPsychReport,
+                styleSheet: MarkdownStyleSheet(
+                  p: const TextStyle(fontSize: 13, height: 1.5, color: Colors.white),
+                  h3: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.primaryLight),
+                ),
+              ),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(s['icon']!, style: const TextStyle(fontSize: 20)),
-                const SizedBox(width: 12),
-                Expanded(child: Text(s['text']!, style: const TextStyle(fontSize: 13, height: 1.4))),
-              ],
+            const SizedBox(height: AppTheme.spaceLg),
+          ],
+
+          // ═══════════════════════════════════════
+          // FEATURE 12: Legacy Projection
+          // ═══════════════════════════════════════
+          if (_legacyProjection.isNotEmpty) ...[
+            _buildSectionTitle('🔮', '5-Year Legacy Projection'),
+            Container(
+              padding: const EdgeInsets.all(AppTheme.spaceLg),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppTheme.danger.withValues(alpha: 0.1), AppTheme.surface],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('AI Forecast Based on Current Trajectory:', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.danger)),
+                  const SizedBox(height: 8),
+                  Text(
+                    _legacyProjection,
+                    style: const TextStyle(fontSize: 13, height: 1.5, color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
             ),
-          )),
+          ],
         ],
       ),
     );

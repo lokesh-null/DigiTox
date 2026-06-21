@@ -206,14 +206,29 @@ class DataProvider {
   }
 
   /// Get hourly heatmap data (replaces generateHeatmapData)
-  Future<List<HeatmapEntry>> getHeatmapData() async {
+  Future<List<HeatmapEntry>> getHeatmapData({String filter = 'All'}) async {
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
 
-    final rows = await _db.getHourlyEventCounts(
-      startOfDay.millisecondsSinceEpoch,
-      now.millisecondsSinceEpoch,
-    );
+    List<Map<String, dynamic>> rows;
+    
+    if (filter == 'Distraction') {
+      rows = await _db.getHourlyFilteredEventCounts(
+        startOfDay.millisecondsSinceEpoch,
+        now.millisecondsSinceEpoch,
+        'addictive',
+      );
+    } else if (filter == 'Focus') {
+      rows = await _db.getHourlyFocusCounts(
+        startOfDay.millisecondsSinceEpoch,
+        now.millisecondsSinceEpoch,
+      );
+    } else {
+      rows = await _db.getHourlyEventCounts(
+        startOfDay.millisecondsSinceEpoch,
+        now.millisecondsSinceEpoch,
+      );
+    }
 
     // Build full 24-hour list
     List<HeatmapEntry> data = [];
@@ -225,11 +240,11 @@ class DataProvider {
       int level;
       if (count == 0) {
         level = 0;
-      } else if (count <= 3) {
+      } else if (count <= (filter == 'Focus' ? 0 : 3)) { // 1 focus session = high level
         level = 1;
-      } else if (count <= 8) {
+      } else if (count <= (filter == 'Focus' ? 1 : 8)) {
         level = 2;
-      } else if (count <= 15) {
+      } else if (count <= (filter == 'Focus' ? 2 : 15)) {
         level = 3;
       } else {
         level = 4;

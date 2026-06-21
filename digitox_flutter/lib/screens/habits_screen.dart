@@ -5,6 +5,9 @@ import '../widgets/habit_item.dart';
 import '../widgets/contribution_grid.dart';
 import '../data/mock_data.dart';
 import '../data/data_provider.dart';
+import '../data/database.dart';
+import '../data/behavioral_engine.dart';
+import '../data/device_intelligence.dart';
 import '../utils/storage.dart';
 
 class HabitsScreen extends StatefulWidget {
@@ -16,6 +19,7 @@ class HabitsScreen extends StatefulWidget {
 
 class _HabitsScreenState extends State<HabitsScreen> {
   List<Habit> habits = [];
+  List<Map<String, dynamic>> _challenges = [];
   final List<String> emojis = ['🌅', '📚', '🚫', '🌆', '😴', '🧘', '🏃', '✍️', '🎸', '🌿', '💧', '🍎'];
 
   @override
@@ -32,7 +36,12 @@ class _HabitsScreenState extends State<HabitsScreen> {
       habits = List.from(defaultHabits);
       _saveHabits();
     }
-    setState(() {});
+    
+    // Feature 7: Load daily challenges
+    await BehavioralEngine().generateDailyChallenges();
+    _challenges = await DigiToxDatabase().getChallengesForDate(DeviceIntelligence.todayString());
+    
+    if (mounted) setState(() {});
   }
 
   Future<void> _saveHabits() async {
@@ -233,6 +242,15 @@ class _HabitsScreenState extends State<HabitsScreen> {
           )),
           const SizedBox(height: AppTheme.spaceLg),
 
+          // ═══════════════════════════════════════
+          // FEATURE 7: Anti-Doomscroll Challenges
+          // ═══════════════════════════════════════
+          if (_challenges.isNotEmpty) ...[
+            _buildSectionTitle('🎯', 'Daily Challenges'),
+            ..._challenges.map((c) => _buildChallengeCard(c)),
+            const SizedBox(height: AppTheme.spaceLg),
+          ],
+
           // Contribution Grid
           GlassCard(
             child: Column(
@@ -274,6 +292,55 @@ class _HabitsScreenState extends State<HabitsScreen> {
               ],
             ),
           )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChallengeCard(Map<String, dynamic> challenge) {
+    bool isCompleted = challenge['completed'] == 1;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppTheme.spaceSm),
+      padding: const EdgeInsets.all(AppTheme.spaceMd),
+      decoration: BoxDecoration(
+        color: isCompleted ? AppTheme.primary.withValues(alpha: 0.1) : AppTheme.surfaceHover,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(
+          color: isCompleted ? AppTheme.primary.withValues(alpha: 0.3) : AppTheme.border,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isCompleted ? AppTheme.primary : AppTheme.surface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isCompleted ? Icons.check : Icons.local_fire_department,
+              size: 20,
+              color: isCompleted ? Colors.black : AppTheme.primary,
+            ),
+          ),
+          const SizedBox(width: AppTheme.spaceMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  challenge['description'] as String,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    decoration: isCompleted ? TextDecoration.lineThrough : null,
+                    color: isCompleted ? AppTheme.textSecondary : Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text('+${challenge['xp_reward']} XP', style: const TextStyle(color: AppTheme.primaryLight, fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
         ],
       ),
     );

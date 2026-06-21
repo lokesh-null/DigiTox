@@ -4,8 +4,9 @@ import '../data/data_provider.dart';
 
 class HeatmapGrid extends StatelessWidget {
   final List<HeatmapEntry> data;
+  final String filter;
 
-  const HeatmapGrid({super.key, required this.data});
+  const HeatmapGrid({super.key, required this.data, this.filter = 'All'});
 
   @override
   Widget build(BuildContext context) {
@@ -75,13 +76,30 @@ class HeatmapGrid extends StatelessWidget {
   }
 
   Color _getColorForLevel(int level) {
-    switch (level) {
-      case 0: return AppTheme.surfaceActive;
-      case 1: return const Color(0x336C5CE7);
-      case 2: return const Color(0x666C5CE7);
-      case 3: return const Color(0x66FF6B6B);
-      case 4: return const Color(0xB3FF6B6B);
-      default: return AppTheme.surfaceActive;
+    if (level == 0) return AppTheme.surfaceActive;
+    
+    if (filter == 'Distraction') {
+      switch (level) {
+        case 1: return const Color(0x33FF6B6B);
+        case 2: return const Color(0x66FF6B6B);
+        case 3: return const Color(0x99FF6B6B);
+        case 4: return const Color(0xFFFF6B6B);
+      }
+    } else if (filter == 'Focus') {
+      switch (level) {
+        case 1: return const Color(0x3300B894);
+        case 2: return const Color(0x6600B894);
+        case 3: return const Color(0x9900B894);
+        case 4: return const Color(0xFF00B894);
+      }
+    } else {
+      switch (level) {
+        case 1: return const Color(0x336C5CE7);
+        case 2: return const Color(0x666C5CE7);
+        case 3: return const Color(0x996C5CE7);
+        case 4: return const Color(0xFF6C5CE7);
+      }
     }
+    return AppTheme.surfaceActive;
   }
 }

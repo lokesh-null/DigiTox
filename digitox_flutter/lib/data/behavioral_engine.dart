@@ -838,6 +838,100 @@ class BehavioralEngine {
       trendDirection: recent3DayAvg > baseline7DayAvg * 1.1 ? 'rising' : recent3DayAvg < baseline7DayAvg * 0.9 ? 'falling' : 'stable',
     );
   }
+
+  // ============================================================
+  // ANTI-DOOMSCROLL CHALLENGES (Feature 7)
+  // Generates 3 personalized daily challenges based on recent usage
+  // ============================================================
+
+  Future<void> generateDailyChallenges() async {
+    final today = DeviceIntelligence.todayString();
+    final existing = await _db.getChallengesForDate(today);
+    if (existing.isNotEmpty) return; // Already generated
+
+    final format = DateFormat('yyyy-MM-dd');
+    final yesterday = format.format(DateTime.now().subtract(const Duration(days: 1)));
+    final yesterdayUsage = await _db.getAppUsageForDate(yesterday);
+
+    List<Map<String, dynamic>> newChallenges = [];
+
+    // 1. App-specific reduction challenge (find most used addictive app)
+    String topAddictiveApp = '';
+    int topMinutes = 0;
+    for (final app in yesterdayUsage) {
+      if (AppClassifier.isAddictive(app['category'] as String)) {
+        int mins = app['total_minutes'] as int? ?? 0;
+        if (mins > topMinutes) {
+          topMinutes = mins;
+          topAddictiveApp = app['app_name'] as String? ?? app['package_name'] as String;
+        }
+      }
+    }
+
+    if (topAddictiveApp.isNotEmpty && topMinutes > 15) {
+      int targetMinutes = (topMinutes * 0.7).round(); // 30% reduction
+      newChallenges.add({
+        'type': 'reduction',
+        'desc': 'Keep $topAddictiveApp usage under $targetMinutes mins today (Yesterday: $topMinutes mins)',
+        'xp': 20,
+      });
+    } else {
+      newChallenges.add({
+        'type': 'baseline_addictive',
+        'desc': 'Keep total addictive app usage under 60 minutes today',
+        'xp': 20,
+      });
+    }
+
+    // 2. Focus challenge
+    final sessions = await _db.getFocusSessionsForRange(
+        DateTime.now().subtract(const Duration(days: 1)).millisecondsSinceEpoch,
+        DateTime.now().millisecondsSinceEpoch);
+    
+    int completedYesterday = sessions.where((s) => s['completed'] == 1).length;
+    if (completedYesterday == 0) {
+      newChallenges.add({
+        'type': 'focus_starter',
+        'desc': 'Complete at least one 15-minute Focus Session',
+        'xp': 15,
+      });
+    } else {
+      newChallenges.add({
+        'type': 'focus_streak',
+        'desc': 'Complete ${completedYesterday + 1} Focus Sessions today',
+        'xp': 25,
+      });
+    }
+
+    // 3. Behavioral challenge
+    final accessData = await DeviceIntelligence.getAccessibilityData();
+    int rapidSwitches = accessData['rapidSwitchCountToday'] as int? ?? 0;
+    
+    if (rapidSwitches > 5) {
+      newChallenges.add({
+        'type': 'mindfulness',
+        'desc': 'Reduce rapid app switching (less than 3 times today)',
+        'xp': 15,
+      });
+    } else {
+      newChallenges.add({
+        'type': 'night_routine',
+        'desc': 'No addictive apps after 10:00 PM',
+        'xp': 15,
+      });
+    }
+
+    // Insert into DB
+    for (final c in newChallenges) {
+      await _db.upsertChallenge(
+        date: today,
+        challengeType: c['type'] as String,
+        description: c['desc'] as String,
+        completed: false,
+        xpReward: c['xp'] as int,
+      );
+    }
+  }
 }
 
 // ============================================================

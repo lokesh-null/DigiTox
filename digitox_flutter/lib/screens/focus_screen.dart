@@ -25,6 +25,7 @@ class _FocusScreenState extends State<FocusScreen> {
   Timer? _timer;
   int completedSessions = 0;
   String currentTask = '';
+  bool isContractSigned = false;
   FocusIdentityResult? _identity;
 
   @override
@@ -58,9 +59,59 @@ class _FocusScreenState extends State<FocusScreen> {
   }
 
   void _stopFocus() {
+    if (isContractSigned) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppTheme.bgSecondary,
+          title: const Text('⚠️ Break Contract?'),
+          content: const Text('You signed a commitment contract for this session. If you stop now, you will lose 30 XP.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Keep Focusing', style: TextStyle(color: AppTheme.primaryLight)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _executeStopFocus(true);
+              },
+              child: const Text('Break Contract', style: TextStyle(color: AppTheme.danger)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      _executeStopFocus(false);
+    }
+  }
+
+  void _executeStopFocus(bool brokeContract) async {
     _timer?.cancel();
+    
+    // Penalize if broken contract
+    if (brokeContract) {
+      final now = DateTime.now();
+      // Record a failed session with negative XP
+      final startTime = now.subtract(Duration(seconds: (selectedDuration * 60) - focusRemaining)).millisecondsSinceEpoch;
+      final sessionId = await DigiToxDatabase().insertFocusSession(
+        startTime: startTime,
+        durationMinutes: selectedDuration,
+        task: currentTask.isNotEmpty ? currentTask : null,
+        contractText: isContractSigned ? 'I commit to focus.' : null,
+      );
+      // Negative XP for breaking contract
+      await DigiToxDatabase().completeFocusSession(sessionId, now.millisecondsSinceEpoch, -30);
+      
+      // Update identity in background
+      BehavioralEngine().computeFocusIdentity().then((id) {
+        if (mounted) setState(() => _identity = id);
+      });
+    }
+
     setState(() {
       isFocusActive = false;
+      isContractSigned = false;
     });
   }
 
@@ -71,6 +122,10 @@ class _FocusScreenState extends State<FocusScreen> {
     await Storage.save(StorageKeys.focusSessions, completedSessions);
     await Storage.save(StorageKeys.streak, streak + 1);
 
+    // Calculate XP
+    int xp = _xpForDuration(selectedDuration);
+    if (isContractSigned) xp += 25; // Bonus for contract
+
     // Log to database
     final now = DateTime.now();
     final startTime = now.subtract(Duration(minutes: selectedDuration)).millisecondsSinceEpoch;
@@ -78,15 +133,16 @@ class _FocusScreenState extends State<FocusScreen> {
       startTime: startTime,
       durationMinutes: selectedDuration,
       task: currentTask.isNotEmpty ? currentTask : null,
+      contractText: isContractSigned ? 'I commit to focus.' : null,
     );
-    await DigiToxDatabase().completeFocusSession(sessionId, now.millisecondsSinceEpoch, _xpForDuration(selectedDuration));
+    await DigiToxDatabase().completeFocusSession(sessionId, now.millisecondsSinceEpoch, xp);
 
     setState(() {
       isFocusActive = false;
+      isContractSigned = false;
     });
 
     if (mounted) {
-      final xp = _xpForDuration(selectedDuration);
       // Refresh identity
       _identity = await BehavioralEngine().computeFocusIdentity();
       if (!mounted) return;
@@ -219,6 +275,48 @@ class _FocusScreenState extends State<FocusScreen> {
               ),
             
             const SizedBox(height: AppTheme.spaceXl),
+
+            // ═══════════════════════════════════════
+            // FEATURE 13: Gamified Focus Contracts
+            // ═══════════════════════════════════════
+            if (!isFocusActive)
+              Container(
+                margin: const EdgeInsets.only(bottom: AppTheme.spaceXl),
+                padding: const EdgeInsets.all(AppTheme.spaceMd),
+                decoration: BoxDecoration(
+                  color: isContractSigned ? AppTheme.primary.withValues(alpha: 0.1) : AppTheme.surface,
+                  border: Border.all(color: isContractSigned ? AppTheme.primary : AppTheme.border),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isContractSigned ? AppTheme.primary : Colors.white.withValues(alpha: 0.05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.assignment, color: isContractSigned ? Colors.black : Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: AppTheme.spaceMd),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Sign Focus Contract', style: TextStyle(fontWeight: FontWeight.bold)),
+                          SizedBox(height: 4),
+                          Text('+25 XP if completed, -30 XP if broken.', style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: isContractSigned,
+                      activeColor: AppTheme.primary,
+                      onChanged: (val) => setState(() => isContractSigned = val),
+                    ),
+                  ],
+                ),
+              ),
 
             ElevatedButton.icon(
               onPressed: isFocusActive ? _stopFocus : _startFocus,

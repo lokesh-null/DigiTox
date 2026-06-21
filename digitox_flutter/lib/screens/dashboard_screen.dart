@@ -8,6 +8,7 @@ import '../widgets/dopamine_gauge.dart';
 import '../widgets/identity_badge.dart';
 import '../data/data_provider.dart';
 import '../data/behavioral_engine.dart';
+import '../data/ai_service.dart';
 import '../utils/tracker.dart';
 import '../utils/storage.dart';
 
@@ -33,6 +34,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int total = 0;
   int streak = 0;
   bool _loading = true;
+  String _dailyBriefing = '';
 
   // Behavioral Intelligence data
   DopamineDebtResult? _dopamineDebt;
@@ -63,6 +65,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _lifeRecovery = await BehavioralEngine().computeLifeRecovery();
       _alterEgo = await BehavioralEngine().computeAlterEgo();
       _relapse = await BehavioralEngine().computeRelapsePrediction();
+
+      // Feature 11: Daily Briefing
+      _dailyBriefing = await AIService().getDailyBriefing();
 
       // Save daily scores
       await BehavioralEngine().computeAndSaveDailyScores();
@@ -101,6 +106,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 4),
           const Text('Here\'s your digital wellness report for today', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
           const SizedBox(height: AppTheme.spaceLg),
+
+          // ═══════════════════════════════════════
+          // FEATURE 11: Real AI Coach Daily Briefing
+          // ═══════════════════════════════════════
+          if (_dailyBriefing.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(AppTheme.spaceLg),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppTheme.surfaceHover, AppTheme.surface],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('🧠', style: TextStyle(fontSize: 24)),
+                  const SizedBox(width: AppTheme.spaceMd),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('AI Coach', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryLight)),
+                        const SizedBox(height: 4),
+                        Text(
+                          _dailyBriefing,
+                          style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppTheme.spaceLg),
+          ],
 
           // ═══════════════════════════════════════
           // FEATURE 2: Digital Alter Ego

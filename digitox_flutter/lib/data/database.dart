@@ -222,6 +222,35 @@ class DigiToxDatabase {
     ''', [startMs, endMs]);
   }
 
+  Future<List<Map<String, dynamic>>> getHourlyFilteredEventCounts(int startMs, int endMs, String categoryType) async {
+    final db = await database;
+    // Join with app_classifications to filter by addictive/productive
+    return db.rawQuery('''
+      SELECT (u.timestamp / 3600000 % 24) as hour, COUNT(*) as count
+      FROM usage_events u
+      LEFT JOIN app_classifications c ON u.package_name = c.package_name
+      WHERE u.timestamp >= ? AND u.timestamp < ? AND u.event_type = 1
+      AND (
+        (? = 'addictive' AND c.category IN ('social_media', 'gaming', 'streaming', 'entertainment'))
+        OR
+        (? = 'productive' AND c.category IN ('productive', 'education', 'development', 'finance'))
+      )
+      GROUP BY hour
+      ORDER BY hour ASC
+    ''', [startMs, endMs, categoryType, categoryType]);
+  }
+
+  Future<List<Map<String, dynamic>>> getHourlyFocusCounts(int startMs, int endMs) async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT (start_time / 3600000 % 24) as hour, COUNT(*) as count
+      FROM focus_sessions
+      WHERE start_time >= ? AND start_time < ?
+      GROUP BY hour
+      ORDER BY hour ASC
+    ''', [startMs, endMs]);
+  }
+
   // === Focus Sessions ===
 
   Future<int> insertFocusSession({
