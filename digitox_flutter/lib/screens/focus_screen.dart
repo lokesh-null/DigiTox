@@ -1,14 +1,17 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/focus_timer_ring.dart';
-import '../widgets/toggle_switch.dart';
-import '../data/mock_data.dart';
 import '../data/database.dart';
 import '../data/behavioral_engine.dart';
+import '../data/installed_apps_repository.dart';
+import '../data/device_intelligence.dart';
 import '../widgets/identity_badge.dart';
 import '../utils/storage.dart';
+import 'focus_app_selector.dart';
+import 'focus_profiles_screen.dart';
 
 class FocusScreen extends StatefulWidget {
   const FocusScreen({super.key});
@@ -28,6 +31,12 @@ class _FocusScreenState extends State<FocusScreen> {
   bool isContractSigned = false;
   FocusIdentityResult? _identity;
 
+  // Real blocked apps
+  List<String> _blockedPackages = [];
+  Map<String, InstalledApp?> _blockedAppDetails = {};
+  String _selectedProfile = 'default';
+  List<Map<String, dynamic>> _profiles = [];
+
   @override
   void initState() {
     super.initState();
@@ -38,15 +47,53 @@ class _FocusScreenState extends State<FocusScreen> {
     completedSessions = await DigiToxDatabase().getCompletedSessionCount();
     currentTask = await Storage.load('digitox_current_task', fallback: '') as String;
     _identity = await BehavioralEngine().computeFocusIdentity();
+    _profiles = await DigiToxDatabase().getAllFocusProfiles();
+
+    // Load installed apps + blocked list
+    await InstalledAppsRepository().loadApps();
+    await _loadBlockedApps();
+
+    // Check if focus enforcement is still active (e.g., after app restart)
+    try {
+      final isActive = await DeviceIntelligence.isFocusEnforcementActive();
+      if (isActive) {
+        final remaining = await DeviceIntelligence.getFocusRemainingSeconds();
+        if (remaining > 0) {
+          setState(() {
+            isFocusActive = true;
+            focusRemaining = remaining;
+          });
+          _startTimer();
+        }
+      }
+    } catch (_) {}
+
     setState(() {});
   }
 
-  void _startFocus() {
+  Future<void> _loadBlockedApps() async {
+    _blockedPackages = await DigiToxDatabase().getBlockedPackages(profile: _selectedProfile);
+    _blockedAppDetails = {};
+    for (final pkg in _blockedPackages) {
+      _blockedAppDetails[pkg] = InstalledAppsRepository().getApp(pkg);
+    }
+  }
+
+  void _startFocus() async {
     setState(() {
       isFocusActive = true;
       focusRemaining = selectedDuration * 60;
     });
 
+    // Start real enforcement
+    try {
+      await DeviceIntelligence.startFocusEnforcement(_blockedPackages, selectedDuration);
+    } catch (_) {}
+
+    _startTimer();
+  }
+
+  void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (focusRemaining > 0) {
         setState(() {
@@ -88,11 +135,15 @@ class _FocusScreenState extends State<FocusScreen> {
 
   void _executeStopFocus(bool brokeContract) async {
     _timer?.cancel();
-    
+
+    // Stop real enforcement
+    try {
+      await DeviceIntelligence.stopFocusEnforcement();
+    } catch (_) {}
+
     // Penalize if broken contract
     if (brokeContract) {
       final now = DateTime.now();
-      // Record a failed session with negative XP
       final startTime = now.subtract(Duration(seconds: (selectedDuration * 60) - focusRemaining)).millisecondsSinceEpoch;
       final sessionId = await DigiToxDatabase().insertFocusSession(
         startTime: startTime,
@@ -100,10 +151,8 @@ class _FocusScreenState extends State<FocusScreen> {
         task: currentTask.isNotEmpty ? currentTask : null,
         contractText: isContractSigned ? 'I commit to focus.' : null,
       );
-      // Negative XP for breaking contract
       await DigiToxDatabase().completeFocusSession(sessionId, now.millisecondsSinceEpoch, -30);
-      
-      // Update identity in background
+
       BehavioralEngine().computeFocusIdentity().then((id) {
         if (mounted) setState(() => _identity = id);
       });
@@ -122,9 +171,14 @@ class _FocusScreenState extends State<FocusScreen> {
     await Storage.save(StorageKeys.focusSessions, completedSessions);
     await Storage.save(StorageKeys.streak, streak + 1);
 
+    // Stop real enforcement
+    try {
+      await DeviceIntelligence.stopFocusEnforcement();
+    } catch (_) {}
+
     // Calculate XP
     int xp = _xpForDuration(selectedDuration);
-    if (isContractSigned) xp += 25; // Bonus for contract
+    if (isContractSigned) xp += 25;
 
     // Log to database
     final now = DateTime.now();
@@ -143,11 +197,10 @@ class _FocusScreenState extends State<FocusScreen> {
     });
 
     if (mounted) {
-      // Refresh identity
       _identity = await BehavioralEngine().computeFocusIdentity();
       if (!mounted) return;
       setState(() {});
-      
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -207,13 +260,30 @@ class _FocusScreenState extends State<FocusScreen> {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
+  Widget _buildAppIcon(Uint8List? iconBytes) {
+    if (iconBytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(iconBytes, width: 32, height: 32, gaplessPlayback: true),
+      );
+    }
+    return Container(
+      width: 32, height: 32,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Icon(Icons.android, color: AppTheme.textSecondary, size: 20),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     double progress = isFocusActive ? ((selectedDuration * 60) - focusRemaining) / (selectedDuration * 60) : 0;
 
     return Container(
       decoration: BoxDecoration(
-        border: isFocusActive ? Border.all(color: AppTheme.primary.withOpacity(0.5), width: 4) : null,
+        border: isFocusActive ? Border.all(color: AppTheme.primary.withValues(alpha: 0.5), width: 4) : null,
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppTheme.spaceLg),
@@ -223,7 +293,58 @@ class _FocusScreenState extends State<FocusScreen> {
             Text('Focus Mode', style: Theme.of(context).textTheme.displayMedium),
             const SizedBox(height: 4),
             const Text('Deep work starts here', style: TextStyle(color: AppTheme.textSecondary)),
-            const SizedBox(height: AppTheme.spaceXl),
+            const SizedBox(height: AppTheme.spaceMd),
+
+            // Profile selector
+            if (!isFocusActive && _profiles.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(bottom: AppTheme.spaceMd),
+                child: InkWell(
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => FocusProfilesScreen(
+                        currentProfile: _selectedProfile,
+                        onProfileSelected: (profile) async {
+                          _selectedProfile = profile;
+                          await _loadBlockedApps();
+                          setState(() {});
+                        },
+                      )),
+                    );
+                    _profiles = await DigiToxDatabase().getAllFocusProfiles();
+                    await _loadBlockedApps();
+                    setState(() {});
+                  },
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      border: Border.all(color: AppTheme.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _profiles.firstWhere((p) => p['id'] == _selectedProfile, orElse: () => {'emoji': '🎯', 'name': 'Default'})['emoji'] as String? ?? '🎯',
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _profiles.firstWhere((p) => p['id'] == _selectedProfile, orElse: () => {'emoji': '🎯', 'name': 'Default'})['name'] as String? ?? 'Default',
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_drop_down, color: AppTheme.textSecondary),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: AppTheme.spaceMd),
 
             FocusTimerRing(
               progress: progress,
@@ -368,41 +489,83 @@ class _FocusScreenState extends State<FocusScreen> {
             if (_identity != null)
               const SizedBox(height: AppTheme.spaceLg),
 
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Row(
-                children: [
-                  const Text('🚫', style: TextStyle(fontSize: 18)),
-                  const SizedBox(width: 8),
-                  Text('Blocked During Focus', style: Theme.of(context).textTheme.titleLarge),
-                ],
-              ),
+            // ═══════════════════════════════════════
+            // Blocked Apps Section (Real)
+            // ═══════════════════════════════════════
+            Row(
+              children: [
+                const Text('🚫', style: TextStyle(fontSize: 18)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Blocked During Focus (${_blockedPackages.length})', style: Theme.of(context).textTheme.titleLarge),
+                ),
+                if (!isFocusActive)
+                  TextButton.icon(
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => FocusAppSelector(profile: _selectedProfile)),
+                      );
+                      await _loadBlockedApps();
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.edit, size: 16),
+                    label: const Text('Edit', style: TextStyle(fontSize: 12)),
+                  ),
+              ],
             ),
             const SizedBox(height: AppTheme.spaceMd),
 
-            ...mockApps.where((app) => app.category == AppCategories.addictive).map((app) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppTheme.spaceSm),
-                child: Row(
+            if (_blockedPackages.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(AppTheme.spaceLg),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Column(
                   children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(8)),
-                      child: Center(child: Text(app.emoji)),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(app.name)),
-                    ToggleSwitch(
-                      value: app.blocked,
-                      disabled: isFocusActive,
-                      onChanged: (val) {
-                        setState(() => app.blocked = val);
+                    const Text('No apps blocked yet', style: TextStyle(color: AppTheme.textSecondary)),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => FocusAppSelector(profile: _selectedProfile)),
+                        );
+                        await _loadBlockedApps();
+                        setState(() {});
                       },
+                      child: const Text('Select Apps to Block'),
                     ),
                   ],
                 ),
-              );
-            }),
+              )
+            else
+              ..._blockedPackages.map((pkg) {
+                final app = _blockedAppDetails[pkg];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppTheme.spaceSm),
+                  child: Row(
+                    children: [
+                      _buildAppIcon(app?.iconBytes),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(app?.appName ?? pkg.split('.').last, style: const TextStyle(fontWeight: FontWeight.w500)),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.danger.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('BLOCKED', style: TextStyle(fontSize: 10, color: AppTheme.danger, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                );
+              }),
           ],
         ),
       ),

@@ -94,6 +94,68 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
 
+                "startFocusEnforcement" -> {
+                    val blockedPackages = call.argument<List<String>>("blockedPackages") ?: emptyList()
+                    val durationMinutes = call.argument<Int>("durationMinutes") ?: 0
+                    val prefs = getSharedPreferences("digitox_focus", MODE_PRIVATE)
+                    prefs.edit()
+                        .putBoolean("focus_active", true)
+                        .putStringSet("blocked_packages", blockedPackages.toSet())
+                        .putLong("focus_start_time", System.currentTimeMillis())
+                        .putInt("focus_duration_minutes", durationMinutes)
+                        .putLong("focus_end_time", System.currentTimeMillis() + (durationMinutes * 60 * 1000L))
+                        .apply()
+                    result.success(true)
+                }
+
+                "stopFocusEnforcement" -> {
+                    val prefs = getSharedPreferences("digitox_focus", MODE_PRIVATE)
+                    prefs.edit()
+                        .putBoolean("focus_active", false)
+                        .putStringSet("blocked_packages", emptySet())
+                        .apply()
+                    result.success(true)
+                }
+
+                "isFocusEnforcementActive" -> {
+                    val prefs = getSharedPreferences("digitox_focus", MODE_PRIVATE)
+                    val isActive = prefs.getBoolean("focus_active", false)
+                    val endTime = prefs.getLong("focus_end_time", 0)
+                    // Auto-expire
+                    if (isActive && System.currentTimeMillis() > endTime) {
+                        prefs.edit().putBoolean("focus_active", false).apply()
+                        result.success(false)
+                    } else {
+                        result.success(isActive)
+                    }
+                }
+
+                "getFocusRemainingSeconds" -> {
+                    val prefs = getSharedPreferences("digitox_focus", MODE_PRIVATE)
+                    val endTime = prefs.getLong("focus_end_time", 0)
+                    val remaining = ((endTime - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0)
+                    result.success(remaining)
+                }
+
+                "syncBlockedApps" -> {
+                    val packages = call.argument<List<String>>("packages") ?: emptyList()
+                    val prefs = getSharedPreferences("digitox_focus", MODE_PRIVATE)
+                    prefs.edit().putStringSet("blocked_packages", packages.toSet()).apply()
+                    result.success(true)
+                }
+
+                "getBlockAnalytics" -> {
+                    val prefs = getSharedPreferences("digitox_focus", MODE_PRIVATE)
+                    val blockedAttempts = prefs.getInt("blocked_attempts_today", 0)
+                    val overrideCount = prefs.getInt("override_count_today", 0)
+                    val mostAttemptedApp = prefs.getString("most_attempted_app", "") ?: ""
+                    result.success(mapOf(
+                        "blockedAttempts" to blockedAttempts,
+                        "overrideCount" to overrideCount,
+                        "mostAttemptedApp" to mostAttemptedApp
+                    ))
+                }
+
                 else -> result.notImplemented()
             }
         }
@@ -195,11 +257,37 @@ class MainActivity : FlutterActivity() {
                 ApplicationInfo.CATEGORY_UNDEFINED
             }
 
+            // Extract icon as Base64 PNG
+            val iconBase64 = try {
+                val drawable = pm.getApplicationIcon(appInfo)
+                val bitmap = if (drawable is android.graphics.drawable.BitmapDrawable) {
+                    drawable.bitmap
+                } else {
+                    val bmp = android.graphics.Bitmap.createBitmap(
+                        drawable.intrinsicWidth.coerceAtLeast(1),
+                        drawable.intrinsicHeight.coerceAtLeast(1),
+                        android.graphics.Bitmap.Config.ARGB_8888
+                    )
+                    val canvas = android.graphics.Canvas(bmp)
+                    drawable.setBounds(0, 0, canvas.width, canvas.height)
+                    drawable.draw(canvas)
+                    bmp
+                }
+                // Scale down to 48x48 for performance
+                val scaled = android.graphics.Bitmap.createScaledBitmap(bitmap, 48, 48, true)
+                val stream = java.io.ByteArrayOutputStream()
+                scaled.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+                android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
+            } catch (e: Exception) {
+                null
+            }
+
             mapOf(
                 "packageName" to pkgName,
                 "appName" to appName,
                 "category" to category,
-                "isSystemApp" to ((appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0)
+                "isSystemApp" to ((appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0),
+                "iconBase64" to iconBase64
             )
         }.sortedBy { it["appName"] as String }
     }

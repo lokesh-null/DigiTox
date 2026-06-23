@@ -8,6 +8,8 @@ import '../widgets/dopamine_gauge.dart';
 import '../data/data_provider.dart';
 import '../data/behavioral_engine.dart';
 import '../data/ai_service.dart';
+import '../data/database.dart';
+import '../data/installed_apps_repository.dart';
 
 class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});
@@ -37,6 +39,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
   String _legacyProjection = '';
   String _weeklyPsychReport = '';
 
+  // Block Analytics
+  int _blockedAttempts = 0;
+  String? _mostBlockedApp;
+  int _overrideCount = 0;
+  int _focusSuccessRate = 0;
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +71,22 @@ class _InsightsScreenState extends State<InsightsScreen> {
       // Load Real AI Reports
       _legacyProjection = await AIService().getLegacyProjection();
       _weeklyPsychReport = await AIService().getWeeklyPsychologicalReport();
+
+      // Block analytics
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      _blockedAttempts = await DigiToxDatabase().getBlockedAttemptCount(startOfDay.millisecondsSinceEpoch, now.millisecondsSinceEpoch);
+      _mostBlockedApp = await DigiToxDatabase().getMostBlockedApp(startOfDay.millisecondsSinceEpoch, now.millisecondsSinceEpoch);
+      _overrideCount = await DigiToxDatabase().getOverrideCount(startOfDay.millisecondsSinceEpoch, now.millisecondsSinceEpoch);
+      final totalSessions = await DigiToxDatabase().getCompletedSessionCount();
+      _focusSuccessRate = totalSessions > 0 ? ((totalSessions / (totalSessions + _overrideCount)) * 100).round() : 100;
+
+      // Resolve most blocked app name
+      if (_mostBlockedApp != null) {
+        await InstalledAppsRepository().loadApps();
+        final app = InstalledAppsRepository().getApp(_mostBlockedApp!);
+        if (app != null) _mostBlockedApp = app.appName;
+      }
     } catch (e) {
       // Use defaults
     }
@@ -398,6 +422,57 @@ class _InsightsScreenState extends State<InsightsScreen> {
               ),
             ),
           ],
+
+          // ═══════════════════════════════════════
+          // Focus Enforcement Analytics
+          // ═══════════════════════════════════════
+          _buildSectionTitle('🛡️', 'Focus Enforcement Stats'),
+          Container(
+            padding: const EdgeInsets.all(AppTheme.spaceLg),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _buildAnalyticTile('🚫', 'Blocked Today', '$_blockedAttempts')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildAnalyticTile('⚠️', 'Overrides', '$_overrideCount')),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _buildAnalyticTile('🎯', 'Success Rate', '$_focusSuccessRate%')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildAnalyticTile('📱', 'Most Blocked', _mostBlockedApp ?? 'N/A')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppTheme.spaceLg),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnalyticTile(String emoji, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceHover,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+      ),
+      child: Column(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 20)),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(label, style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
         ],
       ),
     );

@@ -146,4 +146,60 @@ class DeviceIntelligence {
   static String todayString() {
     return formatDate(DateTime.now());
   }
+
+  // === Focus Enforcement ===
+
+  static Future<void> startFocusEnforcement(List<String> blockedPackages, int durationMinutes) async {
+    try {
+      await _channel.invokeMethod('startFocusEnforcement', {
+        'blockedPackages': blockedPackages,
+        'durationMinutes': durationMinutes,
+      });
+    } catch (e) {
+      // Enforcement not available
+    }
+  }
+
+  static Future<void> stopFocusEnforcement() async {
+    try {
+      await _channel.invokeMethod('stopFocusEnforcement');
+    } catch (e) {
+      // Enforcement not available
+    }
+  }
+
+  static Future<bool> isFocusEnforcementActive() async {
+    try {
+      return await _channel.invokeMethod<bool>('isFocusEnforcementActive') ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<int> getFocusRemainingSeconds() async {
+    try {
+      return await _channel.invokeMethod<int>('getFocusRemainingSeconds') ?? 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  static Future<void> syncBlockedApps(List<String> packages) async {
+    try {
+      await _channel.invokeMethod('syncBlockedApps', {
+        'packages': packages,
+      });
+    } catch (e) {
+      // Sync not available
+    }
+  }
+
+  static Future<Map<String, dynamic>> getBlockAnalytics() async {
+    try {
+      final result = await _channel.invokeMethod<Map>('getBlockAnalytics');
+      return result != null ? Map<String, dynamic>.from(result) : {};
+    } catch (e) {
+      return {};
+    }
+  }
 }

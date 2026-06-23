@@ -20,8 +20,9 @@ class DigiToxDatabase {
 
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createTables,
+      onUpgrade: _upgradeTables,
     );
   }
 
@@ -143,6 +144,56 @@ class DigiToxDatabase {
     await db.execute('CREATE INDEX idx_usage_events_ts ON usage_events(timestamp)');
     await db.execute('CREATE INDEX idx_focus_sessions_start ON focus_sessions(start_time)');
     await db.execute('CREATE INDEX idx_behavioral_scores_date ON behavioral_scores(date)');
+
+    // v2 tables
+    await _createV2Tables(db);
+  }
+
+  Future<void> _upgradeTables(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createV2Tables(db);
+    }
+  }
+
+  Future<void> _createV2Tables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS blocked_apps (
+        package_name TEXT NOT NULL,
+        app_name TEXT NOT NULL,
+        blocked INTEGER NOT NULL DEFAULT 1,
+        profile TEXT NOT NULL DEFAULT 'default',
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (package_name, profile)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS block_analytics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        package_name TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        override_reason TEXT,
+        override_duration_minutes INTEGER
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS focus_profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        emoji TEXT NOT NULL DEFAULT '🎯',
+        created_at INTEGER NOT NULL
+      )
+    ''');
+
+    // Insert default profile
+    await db.insert('focus_profiles', {
+      'id': 'default',
+      'name': 'Default',
+      'emoji': '🎯',
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
   // === App Usage ===
@@ -473,5 +524,118 @@ class DigiToxDatabase {
     await db.delete('screen_events', where: 'timestamp < ?', whereArgs: [cutoffMs]);
     await db.delete('behavioral_scores', where: 'date < ?', whereArgs: [cutoffDate]);
     await db.delete('trigger_events', where: 'timestamp < ?', whereArgs: [cutoffMs]);
+  }
+
+  // === Blocked Apps ===
+
+  Future<void> upsertBlockedApp(String packageName, String appName, bool blocked, {String profile = 'default'}) async {
+    final db = await database;
+    await db.insert('blocked_apps', {
+      'package_name': packageName,
+      'app_name': appName,
+      'blocked': blocked ? 1 : 0,
+      'profile': profile,
+      'updated_at': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<String>> getBlockedPackages({String profile = 'default'}) async {
+    final db = await database;
+    final results = await db.query('blocked_apps',
+      where: 'blocked = 1 AND profile = ?',
+      whereArgs: [profile],
+    );
+    return results.map((r) => r['package_name'] as String).toList();
+  }
+
+  Future<Map<String, bool>> getBlockedAppsMap({String profile = 'default'}) async {
+    final db = await database;
+    final results = await db.query('blocked_apps', where: 'profile = ?', whereArgs: [profile]);
+    final map = <String, bool>{};
+    for (final row in results) {
+      map[row['package_name'] as String] = (row['blocked'] as int) == 1;
+    }
+    return map;
+  }
+
+  Future<void> removeBlockedApp(String packageName, {String profile = 'default'}) async {
+    final db = await database;
+    await db.delete('blocked_apps',
+      where: 'package_name = ? AND profile = ?',
+      whereArgs: [packageName, profile],
+    );
+  }
+
+  // === Block Analytics ===
+
+  Future<void> insertBlockEvent(String packageName, String eventType, {String? overrideReason, int? overrideDuration}) async {
+    final db = await database;
+    await db.insert('block_analytics', {
+      'package_name': packageName,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'event_type': eventType,
+      'override_reason': overrideReason,
+      'override_duration_minutes': overrideDuration,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getBlockAnalyticsForRange(int startMs, int endMs) async {
+    final db = await database;
+    return db.query('block_analytics',
+      where: 'timestamp >= ? AND timestamp < ?',
+      whereArgs: [startMs, endMs],
+      orderBy: 'timestamp DESC',
+    );
+  }
+
+  Future<int> getBlockedAttemptCount(int startMs, int endMs) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as c FROM block_analytics WHERE event_type = ? AND timestamp >= ? AND timestamp < ?',
+      ['blocked', startMs, endMs],
+    );
+    return result.first['c'] as int;
+  }
+
+  Future<String?> getMostBlockedApp(int startMs, int endMs) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT package_name, COUNT(*) as c FROM block_analytics
+      WHERE event_type = 'blocked' AND timestamp >= ? AND timestamp < ?
+      GROUP BY package_name ORDER BY c DESC LIMIT 1
+    ''', [startMs, endMs]);
+    return result.isNotEmpty ? result.first['package_name'] as String : null;
+  }
+
+  Future<int> getOverrideCount(int startMs, int endMs) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as c FROM block_analytics WHERE event_type = ? AND timestamp >= ? AND timestamp < ?',
+      ['override', startMs, endMs],
+    );
+    return result.first['c'] as int;
+  }
+
+  // === Focus Profiles ===
+
+  Future<List<Map<String, dynamic>>> getAllFocusProfiles() async {
+    final db = await database;
+    return db.query('focus_profiles', orderBy: 'created_at ASC');
+  }
+
+  Future<void> insertFocusProfile(String id, String name, String emoji) async {
+    final db = await database;
+    await db.insert('focus_profiles', {
+      'id': id,
+      'name': name,
+      'emoji': emoji,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<void> deleteFocusProfile(String id) async {
+    final db = await database;
+    await db.delete('focus_profiles', where: 'id = ?', whereArgs: [id]);
+    await db.delete('blocked_apps', where: 'profile = ?', whereArgs: [id]);
   }
 }

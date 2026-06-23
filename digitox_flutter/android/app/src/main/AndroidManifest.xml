@@ -63,6 +63,25 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- Intervention Screen for blocking apps during Focus Mode -->
+        <activity
+            android:name=".InterventionActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.digitox.intervention"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+
+        <!-- Boot Recovery Receiver -->
+        <receiver
+            android:name=".BootCompletedReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Flutter embedding metadata -->
         <meta-data
             android:name="flutterEmbedding"
